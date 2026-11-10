@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>CCTV Business Manager</title>
+  <meta name="theme-color" content="#1f4e8c">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="topbar no-print">
+    <div class="brand">
+      <img src="icon.svg" alt="" width="28" height="28">
+      <span id="brand-name">CCTV Manager</span>
+    </div>
+    <a class="btn btn-primary btn-sm" href="#/jobs/new">+ New Enquiry</a>
+  </header>
+
+  <nav class="sidebar no-print" id="nav">
+    <a href="#/dashboard" data-nav="dashboard"><span class="ico">▦</span><span>Dashboard</span></a>
+    <a href="#/jobs" data-nav="jobs"><span class="ico">☰</span><span>Jobs</span></a>
+    <a href="#/stock" data-nav="stock"><span class="ico">▤</span><span>Stock</span></a>
+    <a href="#/team" data-nav="team"><span class="ico">☺</span><span>Team</span></a>
+    <a href="#/reports" data-nav="reports"><span class="ico">↗</span><span>Reports</span></a>
+    <a href="#/settings" data-nav="settings"><span class="ico">⚙</span><span>Settings</span></a>
+  </nav>
+
+  <main id="app" class="content"></main>
+
+  <dialog id="modal">
+    <form method="dialog" class="modal-close-form"><button class="icon-btn" aria-label="Close">✕</button></form>
+    <div id="modal-body"></div>
+  </dialog>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/store.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

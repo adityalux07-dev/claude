@@ -1,0 +1,10 @@
+{
+  "name": "cctv-business-manager",
+  "version": "1.0.0",
+  "description": "Manage CCTV installation & service jobs: enquiry, team assignment, stock issue, work done, payment, feedback, closing and material returns.",
+  "private": true,
+  "scripts": {
+    "start": "npx --yes http-server -p 8080 -c-1 .",
+    "test": "node --test tests/"
+  }
+}
