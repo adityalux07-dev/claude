@@ -7,7 +7,9 @@
   var app = document.getElementById('app');
   var modal = document.getElementById('modal');
   var modalBody = document.getElementById('modal-body');
+  var DEMO = !!window.CCTV_DEMO;
   var state = load();
+  if (DEMO && !state.jobs.length && !state.items.length) state = S.sampleState();
 
   /* ================= persistence ================= */
 
@@ -108,6 +110,18 @@
     if (f) f.focus();
   }
   function closeModal() { modal.close(); }
+
+  // In-app replacement for confirm()/prompt(): works everywhere, looks native on phones.
+  // ask(message, onYes, { okLabel, danger, input: 'placeholder' }) — onYes receives the typed text.
+  var pendingAsk = null;
+  function ask(message, onYes, o) {
+    o = o || {};
+    pendingAsk = onYes;
+    openModal('<form data-form="ask"><h2>' + esc(o.title || 'Please confirm') + '</h2><p>' + esc(message) + '</p>' +
+      (o.input !== undefined ? field('', '<input name="answer" id="ask-answer" placeholder="' + esc(o.input) + '">') : '') +
+      '<div class="btn-row"><button class="btn ' + (o.danger ? 'btn-danger-solid' : 'btn-primary') + '" type="submit">' + esc(o.okLabel || 'Yes') + '</button>' +
+      '<button class="btn" type="button" data-action="ask-cancel">Cancel</button></div></form>');
+  }
 
   function balanceOf(job) {
     return job.workDoneAt && job.status !== 'cancelled' ? S.invoice(state, job).balance : 0;
@@ -552,7 +566,7 @@
     var inv = S.invoice(state, j);
     var st = state.settings;
     return '<div class="btn-row no-print" style="margin-bottom:12px"><a class="btn" href="#/jobs/' + j.id + '">← Back</a>' +
-      '<button class="btn btn-primary" data-action="print">Print / Save PDF</button></div>' +
+      (DEMO ? '' : '<button class="btn btn-primary" data-action="print">Print / Save PDF</button>') + '</div>' +
       '<div class="invoice"><div class="inv-head"><div><h1>' + esc(st.businessName) + '</h1>' +
         '<div>' + esc(st.address) + '</div><div>' + esc(st.phone) + (st.email ? ' · ' + esc(st.email) : '') + '</div>' +
         (st.taxId ? '<div>Tax ID: ' + esc(st.taxId) + '</div>' : '') + '</div>' +
@@ -705,7 +719,7 @@
     }
     var mats = Object.keys(r.materialsUsed).sort(function (a, b) { return r.materialsUsed[b].amount - r.materialsUsed[a].amount; });
     var members = Object.keys(r.byMember);
-    return '<div class="page-head"><h1>Reports</h1><button class="btn" data-action="export-csv">Export jobs (CSV)</button></div>' +
+    return '<div class="page-head"><h1>Reports</h1>' + (DEMO ? '' : '<button class="btn" data-action="export-csv">Export jobs (CSV)</button>') + '</div>' +
       '<form class="card btn-row" data-form="report-range">' +
         '<div><label>From</label><input type="date" name="from" value="' + esc(from) + '"></div>' +
         '<div><label>To</label><input type="date" name="to" value="' + esc(to) + '"></div>' +
@@ -793,12 +807,13 @@
         field('Default labour charge', '<input name="defaultLabour" type="number" min="0" step="any" value="' + (s.defaultLabour || 0) + '">') +
         field('Phone country code (for WhatsApp)', '<input name="countryCode" value="' + esc(s.countryCode === undefined ? '91' : s.countryCode) + '">') +
       '</div><button class="btn btn-primary" type="submit">Save settings</button></form>' +
+      (DEMO ? '<div class="card"><h2>Demo data</h2><p class="muted small">This is a demo copy. Changes are saved only in your browser.</p><div class="btn-row"><button class="btn" data-action="load-sample">Reset to sample data</button><button class="btn btn-danger" data-action="reset">Start empty</button></div></div>' :
       '<div class="card"><h2>Backup &amp; data</h2>' +
         '<p class="muted small">Your data is stored only in this browser on this device. Download a backup regularly, and use “Restore” to move data to another phone or computer.</p>' +
         '<div class="btn-row"><button class="btn btn-primary" data-action="backup">⬇ Download backup</button>' +
         '<label class="btn" style="margin:0;color:var(--text)">⬆ Restore backup<input type="file" accept=".json,application/json" data-action="restore" hidden></label></div><hr>' +
         '<div class="btn-row"><button class="btn" data-action="load-sample">Load sample data</button>' +
-        '<button class="btn btn-danger" data-action="reset">Erase all data</button></div></div>';
+        '<button class="btn btn-danger" data-action="reset">Erase all data</button></div></div>');
   }
 
   /* ================= event handling ================= */
@@ -813,6 +828,12 @@
     var ok;
 
     switch (kind) {
+      case 'ask':
+        var fn = pendingAsk;
+        pendingAsk = null;
+        closeModal();
+        if (fn) fn(d.answer || '');
+        return;
       case 'job-search': go('/jobs?status=' + (route.query.status || 'active') + '&q=' + encodeURIComponent(d.q || '')); return;
       case 'stock-search': go('/stock?q=' + encodeURIComponent(d.q || '')); return;
       case 'report-range': go('/reports?from=' + (d.from || '') + '&to=' + (d.to || '')); return;
@@ -913,17 +934,29 @@
         if (commit(function () { S.completePaymentStage(state, id); }, 'Payment & feedback done')) render();
         return;
       case 'close-job':
-        if (confirm('Close this job?')) if (commit(function () { S.closeJob(state, id); }, 'Job closed')) render();
+        ask('Close this job? You can still record pending payments afterwards.', function () {
+          if (commit(function () { S.closeJob(state, id); }, 'Job closed')) render();
+        }, { title: 'Close job', okLabel: 'Close job' });
         return;
       case 'remove-payment':
-        if (confirm('Remove this payment entry?')) if (commit(function () { S.removePayment(state, id, el.getAttribute('data-pid')); }, 'Payment removed')) render();
+        var pid = el.getAttribute('data-pid');
+        ask('Remove this payment entry?', function () {
+          if (commit(function () { S.removePayment(state, id, pid); }, 'Payment removed')) render();
+        }, { okLabel: 'Remove', danger: true });
         return;
       case 'cancel-job':
-        var reason = prompt('Reason for cancelling? (any issued material goes back to stock)');
-        if (reason !== null) if (commit(function () { S.cancelJob(state, id, reason); }, 'Job cancelled')) render();
+        ask('Any material already issued will go back to stock.', function (reason) {
+          if (commit(function () { S.cancelJob(state, id, reason); }, 'Job cancelled')) render();
+        }, { title: 'Cancel job', okLabel: 'Cancel job', danger: true, input: 'Reason (optional)' });
         return;
       case 'delete-job':
-        if (confirm('Delete this job permanently?')) if (commit(function () { S.deleteJob(state, id); }, 'Deleted')) go('/jobs');
+        ask('Delete this job permanently?', function () {
+          if (commit(function () { S.deleteJob(state, id); }, 'Deleted')) go('/jobs');
+        }, { okLabel: 'Delete', danger: true });
+        return;
+      case 'ask-cancel':
+        pendingAsk = null;
+        closeModal();
         return;
       case 'print':
         window.print();
@@ -957,19 +990,22 @@
         download('cctv-backup-' + S.today() + '.json', JSON.stringify(state, null, 2), 'application/json');
         return;
       case 'load-sample':
-        if (state.jobs.length && !confirm('This replaces ALL current data with sample data. Continue?')) return;
-        state = S.sampleState();
-        save();
-        toast('Sample data loaded');
-        go('/dashboard');
+        var loadSample = function () {
+          state = S.sampleState();
+          save();
+          toast('Sample data loaded');
+          go('/dashboard');
+        };
+        if (state.jobs.length) ask('This replaces ALL current data with sample data.', loadSample, { okLabel: 'Load sample data', danger: true });
+        else loadSample();
         return;
       case 'reset':
-        if (confirm('Erase ALL jobs, stock and team data? Download a backup first if unsure.') && confirm('Really erase everything?')) {
+        ask('Erase ALL jobs, stock and team data? This cannot be undone — download a backup first if unsure.', function () {
           state = S.createState();
           save();
           toast('All data erased');
           go('/dashboard');
-        }
+        }, { title: 'Erase all data', okLabel: 'Erase everything', danger: true });
         return;
     }
   });
@@ -983,13 +1019,14 @@
       try {
         var data = JSON.parse(reader.result);
         if (!data || !Array.isArray(data.jobs) || !Array.isArray(data.items)) throw new Error('Not a valid backup file');
-        if (!confirm('Replace current data with this backup (' + data.jobs.length + ' jobs, ' + data.items.length + ' items)?')) return;
-        var base = S.createState();
-        data.settings = Object.assign(base.settings, data.settings || {});
-        state = Object.assign(base, data);
-        save();
-        toast('Backup restored');
-        go('/dashboard');
+        ask('Replace current data with this backup (' + data.jobs.length + ' jobs, ' + data.items.length + ' items)?', function () {
+          var base = S.createState();
+          data.settings = Object.assign(base.settings, data.settings || {});
+          state = Object.assign(base, data);
+          save();
+          toast('Backup restored');
+          go('/dashboard');
+        }, { okLabel: 'Restore', danger: true });
       } catch (err) { toast(err.message, true); }
     };
     reader.readAsText(file);
